@@ -56,3 +56,19 @@ tool_description = [
         ],
     },
 ]
+
+
+def invoke_tool(tool, args_dict):
+    tool_name = tool["name"]
+    print(f"    MockToolInvoke {tool_name} / {args_dict}")
+    if tool_name == "find":
+        return ["xyz_flowers_1", "ggg_flowers_temp"]
+    elif tool_name == "grep":
+        return ["not too late. However, if the dahlias are expose to excessive sunlight, they"]
+    elif tool_name == "cat":
+        return "This is a wonderful treatise on dahlias. Dahlias are pretty flowers requiring little sunlight. They need water. Do not plan near pine trees. Trim leaves often."
+    elif tool_name == "create":
+        return "Done."
+    else:
+
+        1/0
