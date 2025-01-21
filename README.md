@@ -28,3 +28,6 @@ You can checkout the repository to the provided tag to experiment with a snapsho
 - tag: `stop_and_rethink`
 - features: planner can choose to set a re-thinking point later in the sequence, effectively allowing for "flow control" via periodic self-reflection checkpoints. Introduced 'macros' (non-function steps) to signal failure, conclusion and these re-planning checkpoints.
 
+### (next milestone)
+
+- features: each param-extraction LLM call allows for short-circuit bailout/rethink/failure outcome.

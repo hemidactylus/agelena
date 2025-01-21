@@ -11,6 +11,19 @@ Based on the following information, please create a JSON format for the argument
 
 Do not use markdown or other extraneous decorations: your output must be directly parsable as JSON.
 
+If for some reason the best outcome is NOT to call the function,
+rather to re-think the course of action to the broader user query,
+you can return the following special JSON:
+{{"__macro": "STOP_AND_REPLAN"}}
+
+If the history collected so far shows that it is hopeless to continue, and that the task
+cannot be completed at all, you can return the following special JSON:
+{{"__macro": "FAILURE", "__notes": "<succinct reason for bailing out>"}}
+
+If you can already give a final success report/answer to the user, you can return
+the following special JSON:
+{{"__macro": "ANSWER_USER", "__message": "<final message to user>"}}
+
 INFORMATION:
 - Function signature: {fct_signature}
 - Detailed parameter explanation:
@@ -91,7 +104,9 @@ def run_agent(query):
 
         next_step = agent['plan'][agent['cursor']]
         if next_step['action_type'] == 'macro':
-            if next_step['target'] == 'REPORT_TO_USER':
+            if next_step['target'] == 'ANSWER_USER':
+                return next_step["message"]
+            elif next_step['target'] == 'REPORT_TO_USER':
                 history_s = _format_history(agent['history'])
                 answer_prompt = ANSWER_PROMPT_0.format(
                     user_query=query,
@@ -99,7 +114,12 @@ def run_agent(query):
                 )
                 u_answer = run_completion(answer_prompt, f"getAnswer")
                 agent['llm_calls'] += 1
-                return u_answer
+                agent['plan'] += [{
+                    "action_type": "macro",
+                    "target": "ANSWER_USER",
+                    "message": u_answer,
+                }]
+                agent['cursor'] += 1
             elif next_step['target'] == 'STOP_AND_REPLAN':
                 history_s = _format_history(agent['history'])
                 next_plan = create_plan(query, history_so_far=history_s)
@@ -145,12 +165,37 @@ def run_agent(query):
                 agent['llm_calls'] += 1
                 f_kwargs = json.loads(f_kwargs_s)
             #
-            result = invoke_tool(tool, f_kwargs)
+            if "__macro" in f_kwargs:
+                # the param-extraction has diverted into another flow
+                macro_name = f_kwargs["__macro"]
+                print(f"    ParamExtractionReturnedMacro({f_kwargs})")
+                if macro_name == "STOP_AND_REPLAN":
+                    agent['plan'] = agent['plan'][:agent["cursor"]] + [{
+                        "action_type": "macro",
+                        "target": "STOP_AND_REPLAN",
+                        "notes": None,
+                    }]
+                elif macro_name == "FAILURE":
+                    agent['plan'] = agent['plan'][:agent["cursor"]] + [{
+                        "action_type": "macro",
+                        "target": "FAILURE",
+                        "notes": f_kwargs["__notes"],
+                    }]
+                elif macro_name == "ANSWER_USER":
+                    agent['plan'] = agent['plan'][:agent["cursor"]] + [{
+                        "action_type": "macro",
+                        "target": "ANSWER_USER",
+                        "message": f_kwargs["__message"],
+                    }]
+                else:
+                    raise ValueError(f"Unknown macro in param-extraction diversion: '{macro_name}'")
+            else:
+                result = invoke_tool(tool, f_kwargs)
 
-            # advance the agent in its flow
-            agent['history'] += [{
-                'result': result,
-                'parameters': f_kwargs,
-                **next_step,
-            }]
-            agent['cursor'] += 1
+                # advance the agent in its flow
+                agent['history'] += [{
+                    'result': result,
+                    'parameters': f_kwargs,
+                    **next_step,
+                }]
+                agent['cursor'] += 1
