@@ -26,7 +26,7 @@ tool_description = [
             {
                 "name": "file",
                 "type": "string",
-                "description": "name of the file to inspect.",
+                "description": "name of the file to inspect. One file only",
             },
             {
                 "name": "pattern",
@@ -42,7 +42,7 @@ tool_description = [
             {
                 "name": "file",
                 "type": "string",
-                "description": "name of the file to open.",
+                "description": "name of the file to open. One file only.",
             },
         ],
     },
