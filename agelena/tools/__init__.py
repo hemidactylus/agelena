@@ -1,7 +1,11 @@
 # comprehensive list of tools, extended description
 
-from .fstools import fs_find, fs_grep
-
+from .fstools import (
+    fs_cat,
+    fs_create,
+    fs_find,
+    fs_grep,
+)
 
 tool_description = [
     {
@@ -69,13 +73,10 @@ def invoke_tool(tool, args_dict):
     elif tool_name == "grep":
         result = fs_grep(**args_dict)
     elif tool_name == "cat":
-        1/0
-        return "This is a wonderful treatise on dahlias. Dahlias are pretty flowers requiring little sunlight. They need water. Do not plan near pine trees. Trim leaves often."
+        result = fs_cat(**args_dict)
     elif tool_name == "create":
-        1/0
-        return "Done."
+        result = fs_create(**args_dict)
     else:
-        1/0
-
+        raise ValueError(f"Cannot invoke unknown tool '{tool['name']}'.")
     print(f"    ToolResult {tool_name} -> {result}")
     return result
