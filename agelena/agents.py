@@ -55,10 +55,16 @@ def _format_history(h):
     if h:
         hs = []
         for hi in h:
-            assert hi['action_type'] == 'function'
-            fdesc = f"{hi['target']}({', '.join('%s=%s' % (k, v) for k, v in hi['parameters'].items())})"
-            this_hs = f"{fdesc} returned {hi['result']}: {hi['notes']}"
-            hs.append(this_hs)
+            if hi['action_type'] == 'function':
+                fdesc = f"{hi['target']}({', '.join('%s=%s' % (k, v) for k, v in hi['parameters'].items())})"
+                this_hs = f"{fdesc} returned {hi['result']}: {hi['notes']}"
+                hs.append(this_hs)
+            elif hi['action_type'] == 'macro':
+                if hi['target'] == 'STOP_AND_REPLAN':
+                    this_hs = 'The agent has stopped to consider what happened so far and devised a new segment of the plan.'
+                else:
+                    raise ValueError(f"Unknown macro type for history summary: '{hi['target']}'")
+                hs.append(this_hs)
         return "\n".join(hs)
     else:
         return None
@@ -75,7 +81,7 @@ def run_agent(query):
     agent = {
         "cursor": 0,
         "plan": plan,
-        "llm_calls": 0,
+        "llm_calls": 1,
         "history": [],
     }
 
@@ -94,17 +100,31 @@ def run_agent(query):
                 u_answer = run_completion(answer_prompt, f"getAnswer")
                 agent['llm_calls'] += 1
                 return u_answer
+            elif next_step['target'] == 'STOP_AND_REPLAN':
+                history_s = _format_history(agent['history'])
+                next_plan = create_plan(query, history_so_far=history_s)
+                agent['llm_calls'] += 1
+                agent['plan'] = agent['plan'] + next_plan
+                # advance the agent in its flow
+                agent['history'] += [next_step]
+                agent['cursor'] += 1
+            elif next_step['target'] == 'FAILURE':
+                notes = next_step["notes"]
+                if notes:
+                    raise ValueError(f"Agent declared defeat midway through execution: {notes}.")
+                else:
+                    raise ValueError(f"Agent declared defeat midway through execution.")
             else:
                 raise ValueError(f"unknown macro '{next_step['target']}'")
         elif next_step['action_type'] == 'function':
             tool = [t for t in tool_description if t['name'] == next_step['target']][0]
             if tool['parameters'] == []:
-                # TODO bypass param LLM call in this case
+                # bypass param LLM call in this case
                 f_kwargs = {}
             else:
                 # LLM call to prepare parameters
                 history_s = _format_history(agent['history'])
-                # TODO handle no history case
+                # TODO handle no history case more gracefully in prompt
                 short_param_desc = ", ".join(p['name'] for p in tool['parameters'])
                 fct_signature = f"{tool['name']}({short_param_desc})"
                 fct_parameter_desc = "\n".join(
@@ -120,7 +140,7 @@ def run_agent(query):
                 )
                 f_kwargs_s = run_completion(
                     param_prompt,
-                    f"getParams[step {agent['cursor']}]/{next_step['action_type']}",
+                    f"getParams[step {agent['cursor']}]/{next_step['target']}",
                 )
                 agent['llm_calls'] += 1
                 f_kwargs = json.loads(f_kwargs_s)
