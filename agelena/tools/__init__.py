@@ -1,5 +1,8 @@
 # comprehensive list of tools, extended description
 
+from .fstools import fs_find, fs_grep
+
+
 tool_description = [
     {
         "name": "find",
@@ -41,7 +44,7 @@ tool_description = [
     },
     {
         "name": "create",
-        "description": "write a certaing text into a new file, identified by its name.",
+        "description": "write a certain text into a new file, identified by its name.",
         "parameters": [
             {
                 "name": "file",
@@ -60,15 +63,19 @@ tool_description = [
 
 def invoke_tool(tool, args_dict):
     tool_name = tool["name"]
-    print(f"    MockToolInvoke {tool_name} / {args_dict}")
+    print(f"    ToolInvoke {tool_name} / {args_dict}")
     if tool_name == "find":
-        return ["xyz_flowers_1", "ggg_flowers_temp"]
+        result = fs_find(**args_dict)
     elif tool_name == "grep":
-        return ["not too late. However, if the dahlias are expose to excessive sunlight, they"]
+        result = fs_grep(**args_dict)
     elif tool_name == "cat":
+        1/0
         return "This is a wonderful treatise on dahlias. Dahlias are pretty flowers requiring little sunlight. They need water. Do not plan near pine trees. Trim leaves often."
     elif tool_name == "create":
+        1/0
         return "Done."
     else:
-
         1/0
+
+    print(f"    ToolResult {tool_name} -> {result}")
+    return result

@@ -111,8 +111,10 @@ def run_agent(query):
                     user_query=query,
                     history=history_s or '(none so far)',
                 )
-                a=1
-                f_kwargs_s = run_completion(param_prompt, f"getParams/{agent['cursor']}")
+                f_kwargs_s = run_completion(
+                    param_prompt,
+                    f"getParams[step {agent['cursor']}]/{step['action']}",
+                )
                 agent['llm_calls'] += 1
                 f_kwargs = json.loads(f_kwargs_s)
             #

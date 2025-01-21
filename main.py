@@ -5,11 +5,11 @@ python  main.py Locate at least one file named after Thor and create another fil
 """
 import sys
 
-from src.agents import run_agent
+from agelena.agents import run_agent
 
 query0 = (
-    "Find one files whose name suggests it is about flowers, check if it "
-    "speaks of dahlias, and write a one-sentence summary of content to a new file."
+    "Find one files whose name suggests it is about reptiles, check if it "
+    "speaks of geckos, and write a very short summary of the contents to a new file."
 )
 
 
