@@ -1,6 +1,6 @@
 import json
 
-from .planner import plan
+from .planner import create_plan
 from .settings import MAX_LLM_CALLS_PER_AGENT
 from .tools import invoke_tool, tool_description
 from .llm import run_completion
@@ -44,7 +44,7 @@ YOUR ACTUAL ANSWER:"""
 
 def _is_at_answering(agent):
     next_step = agent['plan'][agent['cursor']]
-    return next_step['action'] == 'answer'
+    return next_step['action_type'] == 'answer'
 
 
 def _has_exceeded_guards(agent):
@@ -55,7 +55,7 @@ def _format_history(h):
     if h:
         hs = []
         for hi in h:
-            assert hi['action'] == 'function'
+            assert hi['action_type'] == 'function'
             fdesc = f"{hi['target']}({', '.join('%s=%s' % (k, v) for k, v in hi['parameters'].items())})"
             this_hs = f"{fdesc} returned {hi['result']}: {hi['notes']}"
             hs.append(this_hs)
@@ -65,10 +65,16 @@ def _format_history(h):
 
 
 def run_agent(query):
-    pln = plan(query)
+    plan = create_plan(query)
+    if plan[-1]["action_type"] == "macro" and plan[-1]["target"] == "FAILURE":
+        notes = plan[-1]["notes"]
+        if notes:
+            raise ValueError(f"Agent cannot accomplish request: {notes}.")
+        else:
+            raise ValueError(f"Agent cannot accomplish request.")
     agent = {
         "cursor": 0,
-        "plan": pln,
+        "plan": plan,
         "llm_calls": 0,
         "history": [],
     }
@@ -76,21 +82,22 @@ def run_agent(query):
     while True:
         if _has_exceeded_guards(agent):
             raise ValueError("Guards exceeded.")
-        elif _is_at_answering(agent):
-            # TODO handle closing step
-            history_s = _format_history(agent['history'])
-            answer_prompt = ANSWER_PROMPT_0.format(
-                user_query=query,
-                history={history_s} or "(none so far)",
-            )
-            u_answer = run_completion(answer_prompt, f"getAnswer")
-            agent['llm_calls'] += 1
-            return u_answer
-        else:
-            # advance the agent by one step
-            step = agent['plan'][agent['cursor']]
-            assert step['action'] == 'function'
-            tool = [t for t in tool_description if t['name'] == step['target']][0]
+
+        next_step = agent['plan'][agent['cursor']]
+        if next_step['action_type'] == 'macro':
+            if next_step['target'] == 'REPORT_TO_USER':
+                history_s = _format_history(agent['history'])
+                answer_prompt = ANSWER_PROMPT_0.format(
+                    user_query=query,
+                    history={history_s} or "(none so far)",
+                )
+                u_answer = run_completion(answer_prompt, f"getAnswer")
+                agent['llm_calls'] += 1
+                return u_answer
+            else:
+                raise ValueError(f"unknown macro '{next_step['target']}'")
+        elif next_step['action_type'] == 'function':
+            tool = [t for t in tool_description if t['name'] == next_step['target']][0]
             if tool['parameters'] == []:
                 # TODO bypass param LLM call in this case
                 f_kwargs = {}
@@ -107,13 +114,13 @@ def run_agent(query):
                 param_prompt = PARAM_PROMPT_0.format(
                     fct_signature=fct_signature,
                     fct_parameter_desc=fct_parameter_desc,
-                    fct_goal=step['notes'] or '-unspecified-',
+                    fct_goal=next_step['notes'] or '-unspecified-',
                     user_query=query,
                     history=history_s or '(none so far)',
                 )
                 f_kwargs_s = run_completion(
                     param_prompt,
-                    f"getParams[step {agent['cursor']}]/{step['action']}",
+                    f"getParams[step {agent['cursor']}]/{next_step['action_type']}",
                 )
                 agent['llm_calls'] += 1
                 f_kwargs = json.loads(f_kwargs_s)
@@ -124,6 +131,6 @@ def run_agent(query):
             agent['history'] += [{
                 'result': result,
                 'parameters': f_kwargs,
-                **step,
+                **next_step,
             }]
             agent['cursor'] += 1
